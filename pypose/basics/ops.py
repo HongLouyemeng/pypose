@@ -74,6 +74,8 @@ def msqrt(input, method='mpa'):
                                                                       1)).repeat(
             input.size(0), 1, 1)
         return Msqrt().matrix_pade_approximant(input, input_norm, I)
+    elif method == 'gcholesky':
+        return Msqrt().genera_cholesky(input)
     else:
         ValueError('The model_name parameters are incorrect')
 
@@ -204,3 +206,33 @@ class Msqrt:
         # solving the linear system
         input_sqrt = torch.linalg.solve(q_sqrt, torch.sqrt(input_norm) * p_sqrt)
         return input_sqrt
+
+    def generalized_cholesky(self,input):
+        n = input.shape[1]
+        input_sqrt = []
+        for f in input.cpu().numpy():
+            p = np.zeros(n)
+            d = np.zeros(n)
+            D = np.eye(n)
+            for i in range(n):
+                d[i] = 1
+                for j in range(i,n):
+                    sum = 0.0
+                    for k in range(i):
+                        sum += d[k]*f[i][k]*f[j][k]
+                    aux = f[i][j] - sum
+                    if i == j:
+                        if aux<=0:
+                            d[i] = -1
+                        p[i] = np.sqrt(d[i]*aux)
+                    else:
+                        f[j][i] = d[i]*aux/p[i]
+            row, col = np.diag_indices_from(D)
+            D[row,col] = d
+            f[row,col] = p
+            # input_sqrt.append(torch.tensor(np.dot(np.tril(f),np.sqrt(np.abs(D))),dtype = input.dtype,device = input.device))
+            input_sqrt.append(
+                torch.tensor(np.tril(f), dtype=input.dtype,
+                             device=input.device))
+
+        return  torch.cat(input_sqrt)
