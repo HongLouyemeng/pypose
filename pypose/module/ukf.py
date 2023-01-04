@@ -221,7 +221,7 @@ class UKF(nn.Module):
         # np_expand_sqrt = msqrt(np_expand)  # square root of np
 
         L =msqrt(np_expand,method='gcholesky').reshape(-1,self.dim,self.dim)
-        np_expand_sqrt = (L+L.mT)/2
+        np_expand_sqrt = (L+L.mT)/2 + torch.eye(self.dim,device= self.device)*1e-5
         np_select = np_expand_sqrt.gather(1, index_gather).reshape(-1, self.dim)  # select point
         np_select[self.dim:] *= -1
         x_sigma_point = x + np_select
