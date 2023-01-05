@@ -19,8 +19,9 @@ class TestUKF:
 
         model = NTI().to(device)
         ukf = pp.module.UKF(model).to(device)
-
-        T, N = 5, 2  # steps, state dim
+        import time
+        st = time.time()
+        T, N = 1000, 5  # steps, state dim
         states = torch.zeros(T, N, device=device)
         inputs = torch.randn(T, N, device=device)
         observ = torch.zeros(T, N, device=device)
@@ -37,6 +38,8 @@ class TestUKF:
             estim[i + 1], P[i + 1] = ukf(estim[i], observ[i] + v, inputs[i], P[i], Q, R)
         error = (states - estim).norm(dim=-1)
 
+        ed = time.time()
+        print(ed - st)
         assert torch.all(error[0] - error[-1] > 0), "Filter error last step too large."
 
 

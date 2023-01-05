@@ -219,14 +219,8 @@ class UKF(nn.Module):
         p_expand = P.expand(repeat_dim)
         np_expand = self.dim * p_expand  # calculate np
         # np_expand_sqrt = msqrt(np_expand)  # square root of np
-        # L = msqrt(np_expand, method='gcholesky').reshape(-1, self.dim, self.dim)
-        # np_expand_sqrt = (L + L.mT) / 2 + torch.eye(self.dim, device=self.device) * 1e-5
-        from scipy.linalg import cholesky
-        list1 = []
-        for item in np_expand:
-            # list1.append(torch.linalg.cholesky(item))
-            list1.append(torch.tensor(cholesky(item.cpu().numpy()),dtype=self.dtype,device=self.device))
-        np_expand_sqrt = torch.cat(list1).reshape(-1, self.dim, self.dim)
+
+        np_expand_sqrt = torch.linalg.cholesky(np_expand,upper =True)
         np_select = np_expand_sqrt.gather(1, index_gather).reshape(-1, self.dim)  # select point
         np_select[self.dim:] *= -1
         x_sigma_point = x + np_select
