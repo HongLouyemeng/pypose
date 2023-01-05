@@ -2,6 +2,8 @@ import torch
 from .. import LieTensor
 import numpy as np
 import mpmath as mpm
+import scipy.linalg
+from scipy.special import ellipk, ellipj
 
 
 def bmv(input, vec, *, out=None):
@@ -76,6 +78,8 @@ def msqrt(input, method='mpa'):
         return Msqrt().matrix_pade_approximant(input, input_norm, I)
     elif method == 'gcholesky':
         return Msqrt().generalized_cholesky(input)
+    elif method == 'contour_integral':
+        return Msqrt().contour_integral(input)
     else:
         ValueError('The model_name parameters are incorrect')
 
@@ -207,33 +211,63 @@ class Msqrt:
         input_sqrt = torch.linalg.solve(q_sqrt, torch.sqrt(input_norm) * p_sqrt)
         return input_sqrt
 
-    def generalized_cholesky(self,input):
+    def generalized_cholesky(self, input):
         n = input.shape[1]
         input_sqrt = []
         matrix = torch.eye(n)
         row, col = np.diag_indices_from(matrix)
         for f in input:
-            p = torch.zeros(n,dtype=input.dtype,device=input.device)
-            d = torch.zeros(n,dtype=input.dtype,device=input.device)
-            D = torch.eye(n,dtype=input.dtype,device=input.device)
+            p = torch.zeros(n, dtype=input.dtype, device=input.device)
+            d = torch.zeros(n, dtype=input.dtype, device=input.device)
+            D = torch.eye(n, dtype=input.dtype, device=input.device)
             for i in range(n):
                 d[i] = 1.0
-                for j in range(i,n):
+                for j in range(i, n):
                     sum = 0.0
                     for k in range(i):
-                        sum += d[k]*f[i][k]*f[j][k]
+                        sum += d[k] * f[i][k] * f[j][k]
                     aux = f[i][j] - sum
                     if i == j:
-                        if aux<=0.0:
+                        if aux <= 0.0:
                             d[i] = -1.0
-                        p[i] = torch.sqrt(d[i]*aux)
+                        p[i] = torch.sqrt(d[i] * aux)
                     else:
-                        f[j][i] = d[i]*aux/p[i]
+                        f[j][i] = d[i] * aux / p[i]
 
-            D[row,col] = d
-            f[row,col] = p
-            # input_sqrt.append(torch.tensor(np.dot(np.tril(f),np.sqrt(np.abs(D))),dtype = input.dtype,device = input.device))
+            D[row, col] = d
+            f[row, col] = p
+            # input_sqrt.append(torch.tensor(np.dot(np.tril(f),np.sqrt(np.abs(D))),
+            # dtype = input.dtype,device = input.device))
             input_sqrt.append(torch.as_tensor(torch.tril(f), dtype=input.dtype,
-                             device=input.device))
+                                              device=input.device))
 
-        return  torch.cat(input_sqrt)
+        return torch.cat(input_sqrt)
+
+    def contour_integral(self, input):
+
+        n = input.shape[1]
+        input_sqrt = []
+        for A in input:
+
+            A = A.cpu().numpy()
+            I = np.eye(n)
+            e, ev = np.linalg.eig(A)
+            m = e.min()
+            M = e.max()
+            k2 = m / M
+            Kp = ellipk(1 - k2)
+            for N in range(n, 30, n):
+                t = 1j * np.arange(n / 10, N) * Kp / N
+                sn, cn, dn, pn = ellipj(np.imag(t), 1 - k2)
+                cn = 1.0 / cn
+                dn = dn * cn
+                sn = 1j * sn * cn
+                w = np.sqrt(m) * sn
+                dzdt = cn * dn
+                S = np.zeros(np.size(A)).reshape(n, n)
+                for l in range(N):
+                    S = S - np.linalg.pinv(A - w[l] ** 2 * I) * dzdt[l]
+                S = (-2 * Kp * np.sqrt(m) / (np.pi * N)) * np.dot(A, S)
+            input_sqrt.append(torch.tensor(S.real, dtype=input.dtype,
+                                           device=input.device))
+        return torch.cat(input_sqrt)
