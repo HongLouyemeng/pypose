@@ -186,22 +186,21 @@ class UKF(EKF):
         self.model.set_refpoint(state=x, input=u, t=t)
 
         xs, w = self.sigma_weight_points(x, P, k)
-        xs = self.model.state_transition(xs, u, t)
+        xs = self.model.state_transition(xs, u.unsqueeze(1), t)
         xe = (w * xs).sum(dim=-2)
-        ex = xe - xs
+        ex = xe.unsqueeze(1) - xs
         P = self.compute_cov(ex, ex, w, Q)
 
         xs, w = self.sigma_weight_points(xe, P, k)
-        ys = self.model.observation(xs, u, t)
+        ys = self.model.observation(xs, u.unsqueeze(1), t)
         ye = (w * ys).sum(dim=-2)
-        ey = ye - ys
+        ey = ye.unsqueeze(1) - ys
         Py = self.compute_cov(ey, ey, w, R)
 
         Pxy = self.compute_cov(ex, ey, w)
         K = Pxy @ pinv(Py)
         x = xe + bmv(K, y - ye)
         P = P - K @ Py @ K.mT
-
         return x, P
 
     def sigma_weight_points(self, x, P, k):
