@@ -153,7 +153,10 @@ class PF(EKF):
 
         n = x.size(-1)
         xp = self.generate_particles(x, n * P)
-        xs, ye = self.model(xp, u)
+        xs = self.model.state_transition(xp, u, t)
+        ye = self.model.observation(xs, u, t)
+        xs, ye = xs.reshape(-1, n), ye.reshape(-1, n)
+        #xs, ye = self.model(xp, u)
         q = self.relative_likelihood(y, ye, R)
         xr = self.resample_particles(q, xs)
 
